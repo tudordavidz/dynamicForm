@@ -1,205 +1,163 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
-interface FormData {
-  name?: string;
-  age?: number;
-  gender?: string;
-  jobTitle?: string;
-  company?: string;
-  experience?: number;
+interface FormField {
+  name: string;
+  type: "text" | "number" | "select";
+  label: string;
+  options?: string[];
+  required?: boolean;
+}
+
+interface FormSettings {
+  formType: string;
+  fields: FormField[];
 }
 
 export default function DynamicForm() {
-  const [hydrated, setHydrated] = useState(false);
-  const [formType, setFormType] = useState<string>("");
-  const [formData, setFormData] = useState<FormData>({});
-  const [urls, setUrls] = useState<string[]>([""]);
-  const [apiResults, setApiResults] = useState<string[]>([]);
+  const [apiUrl, setApiUrl] = useState<string>("");
+  const [formData, setFormData] = useState<any[]>([]);
+  const [formSettings, setFormSettings] = useState<FormSettings | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
-
-  if (!hydrated) {
-    return <div className="p-4 max-w-lg mx-auto">Loading...</div>;
-  }
+  const handleApiUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setApiUrl(e.target.value);
+  };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+    index: number
   ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const newFormData = [...formData];
+    newFormData[index] = {
+      ...newFormData[index],
+      [e.target.name]: e.target.value,
+    };
+    setFormData(newFormData);
   };
 
-  const handleUrlChange = (index: number, value: string) => {
-    const newUrls = [...urls];
-    newUrls[index] = value;
-    setUrls(newUrls);
-  };
+  const fetchFormSettings = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(apiUrl);
+      const data = await response.json();
 
-  const addUrlField = () => {
-    setUrls([...urls, ""]);
-  };
+      const isArray = Array.isArray(data);
 
-  const fetchUrls = async () => {
-    const requests = urls.map((url) =>
-      fetch(url)
-        .then((res) => res.text())
-        .catch(() => "Failed to fetch")
-    );
-    const results = await Promise.all(requests);
-    setApiResults(results);
-  };
+      const settings: FormSettings = {
+        formType: "dynamic",
+        fields: Object.keys(isArray ? data[0] : data).map((key) => ({
+          name: key,
+          type: "text",
+          label: key,
+        })),
+      };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Form Data:", formData);
-    await fetchUrls();
+      setFormSettings(settings);
+      const initialData: any[] = [];
+
+      if (isArray) {
+        data.forEach((item: any) => {
+          const itemData: any = {};
+          settings.fields.forEach((field) => {
+            itemData[field.name] = item[field.name] || "";
+          });
+          initialData.push(itemData);
+        });
+      } else {
+        const itemData: any = {};
+        settings.fields.forEach((field) => {
+          itemData[field.name] = data[field.name] || "";
+        });
+        initialData.push(itemData);
+      }
+
+      setFormData(initialData);
+    } catch (error) {
+      console.error("Error fetching form settings:", error);
+    }
+    setLoading(false);
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto bg-white shadow-md rounded-lg space-y-6">
-      <h2 className="text-2xl font-semibold text-gray-800">Dynamic Form</h2>
+    <div className="p-8 max-w-4xl mx-auto bg-gradient-to-r from-blue-50 to-blue-100 shadow-lg rounded-lg space-y-8">
+      <h2 className="text-3xl font-semibold text-gray-800 text-center">
+        Dynamic Form
+      </h2>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         <label className="block text-lg font-medium text-gray-700">
-          Select Form Type:
+          Enter API URL:
         </label>
-        <select
-          className="border p-2 w-full rounded-md"
-          value={formType}
-          onChange={(e) => setFormType(e.target.value)}
+        <input
+          className="border p-4 w-full rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          type="text"
+          placeholder="Enter API URL"
+          value={apiUrl}
+          onChange={handleApiUrlChange}
+        />
+        <button
+          className="w-full bg-blue-600 text-white px-4 py-3 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onClick={fetchFormSettings}
+          disabled={loading || !apiUrl}
         >
-          <option value="">-- Choose --</option>
-          <option value="personal">Personal Info</option>
-          <option value="professional">Professional Details</option>
-        </select>
+          {loading ? "Loading..." : "Fetch Form"}
+        </button>
       </div>
 
-      {formType === "personal" && (
-        <>
-          <div className="space-y-4">
-            <label className="block text-lg font-medium text-gray-700">
-              Name:
-            </label>
-            <input
-              className="border p-2 w-full rounded-md"
-              type="text"
-              name="name"
-              value={formData.name || ""}
-              onChange={handleChange}
-              required
-            />
+      {formSettings ? (
+        <form className="space-y-8">
+          {formData.map((dataItem, index) => (
+            <div key={index} className="space-y-6">
+              <h3 className="text-xl font-semibold text-gray-700">
+                Entry {index + 1}
+              </h3>
 
-            <label className="block text-lg font-medium text-gray-700">
-              Age:
-            </label>
-            <input
-              className="border p-2 w-full rounded-md"
-              type="number"
-              name="age"
-              value={formData.age || ""}
-              onChange={handleChange}
-              required
-              min="1"
-            />
+              {formSettings.fields.map((field) => (
+                <div key={field.name} className="space-y-4">
+                  <label className="block text-lg font-medium text-gray-700">
+                    {field.label}
+                  </label>
 
-            <label className="block text-lg font-medium text-gray-700">
-              Gender:
-            </label>
-            <select
-              className="border p-2 w-full rounded-md"
-              name="gender"
-              value={formData.gender || ""}
-              onChange={handleChange}
-              required
-            >
-              <option value="">-- Choose --</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-        </>
-      )}
+                  {field.type === "select" ? (
+                    <select
+                      className="border p-3 w-full rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      name={field.name}
+                      value={dataItem[field.name] || ""}
+                      onChange={(e) => handleChange(e, index)}
+                    >
+                      {field.options?.map((option, optionIndex) => (
+                        <option key={optionIndex} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className="border p-3 w-full rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      type={field.type}
+                      name={field.name}
+                      value={dataItem[field.name] || ""}
+                      onChange={(e) => handleChange(e, index)}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
 
-      {formType === "professional" && (
-        <>
-          <div className="space-y-4">
-            <label className="block text-lg font-medium text-gray-700">
-              Job Title:
-            </label>
-            <input
-              className="border p-2 w-full rounded-md"
-              type="text"
-              name="jobTitle"
-              value={formData.jobTitle || ""}
-              onChange={handleChange}
-              required
-            />
-
-            <label className="block text-lg font-medium text-gray-700">
-              Company:
-            </label>
-            <input
-              className="border p-2 w-full rounded-md"
-              type="text"
-              name="company"
-              value={formData.company || ""}
-              onChange={handleChange}
-              required
-            />
-
-            <label className="block text-lg font-medium text-gray-700">
-              Years of Experience:
-            </label>
-            <input
-              className="border p-2 w-full rounded-md"
-              type="number"
-              name="experience"
-              value={formData.experience || ""}
-              onChange={handleChange}
-              required
-              min="0"
-            />
-          </div>
-        </>
-      )}
-
-      <h3 className="text-lg font-semibold text-gray-700 mt-6">Enter URLs</h3>
-      {urls.map((url, index) => (
-        <div key={index} className="space-y-2">
-          <input
-            className="border p-2 w-full rounded-md"
-            type="text"
-            placeholder="Enter URL"
-            value={url}
-            onChange={(e) => handleUrlChange(index, e.target.value)}
-          />
-        </div>
-      ))}
-      <button
-        className="bg-blue-500 text-white px-4 py-2 mt-2 rounded-md hover:bg-blue-600"
-        onClick={addUrlField}
-      >
-        Add URL
-      </button>
-
-      <button
-        className="bg-green-500 text-white px-4 py-2 mt-4 w-full rounded-md hover:bg-green-600"
-        onClick={handleSubmit}
-      >
-        Submit
-      </button>
-
-      {apiResults.length > 0 && (
-        <div className="mt-6 bg-gray-100 p-4 rounded-md shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-700">Fetched Data:</h3>
-          <pre className="bg-gray-200 p-4 rounded-md overflow-auto">
-            {JSON.stringify(apiResults, null, 2)}
-          </pre>
-        </div>
+          <button
+            className="w-full bg-green-600 text-white px-4 py-3 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+            type="submit"
+          >
+            Submit
+          </button>
+        </form>
+      ) : (
+        <p className="text-center text-gray-600">
+          {loading ? "Fetching form..." : "Enter an API URL to fetch the form"}
+        </p>
       )}
     </div>
   );
